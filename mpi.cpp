@@ -187,20 +187,32 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         }
     }
 
-    // Create and assign grid_cell_t for each rank
-    // TODO: Need to asign rank to all grid_cell_t, this is only doing a subset!
-    for (int i = rank * grid_dimension; i < grid_dimension * grid_dimension; i += grid_dimension * num_procs) {
-        for (int j = 0; (j < grid_dimension) && (i + j < grid_dimension * grid_dimension); j += 1) {
-            // printf("index: %d, rank: %d, grid_dimension: %d, num_procs: %d, num_parts: %d,\n", i + j, rank, grid_dimension, num_procs, num_parts);
-            // fflush(stdout);
-            int curr_grid_index = i + j;
-            rank_grid_cells.push_back(grid_cells[curr_grid_index]);
-            grid_cells[curr_grid_index]->rank = rank;
+    // Assign grid_cell_t for each rank
+    for (int k = 0; k < num_procs; k += 1) {
+        for (int i = k * grid_dimension; i < grid_dimension * grid_dimension; i += grid_dimension * num_procs) {
+            for (int j = 0; (j < grid_dimension) && (i + j < grid_dimension * grid_dimension); j += 1) {
+                // Logging for debugging
+                // printf("index: %d, rank: %d, grid_dimension: %d, num_procs: %d, num_parts: %d,\n", i + j, rank, grid_dimension, num_procs, num_parts);
+                // fflush(stdout);
+
+                // Compute current grid index and get the corresponding grid_cell_t
+                int curr_grid_index = i + j;
+                grid_cell_t* curr_grid_cell = grid_cells[curr_grid_index];
+
+                // Assign rank and index to current grid_cell
+                curr_grid_cell->rank = k;
+                curr_grid_cell->index = curr_grid_index;
+
+                // Add grid_cell to this rank's vector of grid_cell_t
+                if (rank == k) {
+                    rank_grid_cells.push_back(curr_grid_cell);
+                }
+            }
         }
     }
 
-    // TODO: Assign ghost particles
 
+    // TODO: Assign ghost particles
     
     // Log the part ids owned by each rank for debugging
     // printf("rank %d has the following parts: ", rank);
