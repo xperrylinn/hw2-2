@@ -24,6 +24,22 @@ struct grid_cell_t {
     grid_cell_t* neighbor_left_down;
     grid_cell_t* neighbor_right_down;
 
+    // Constructor to initialize member vectors
+    grid_cell_t() 
+        : rank(0), 
+          index(0),
+          particles(),  // Initialize particle vector (empty)
+          ghost_particles(),  // Initialize ghost_particle vector (empty)
+          is_ghost_cell_to(), // Initialize is_ghost_cell_to vector (empty)
+          neighbor_up(nullptr),
+          neighbor_down(nullptr),
+          neighbor_left_up(nullptr),
+          neighbor_right_up(nullptr),
+          neighbor_left(nullptr),
+          neighbor_right(nullptr),
+          neighbor_left_down(nullptr),
+          neighbor_right_down(nullptr) {}
+
 };
 
 static int grid_dimension;
@@ -111,19 +127,19 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 
     // Create grid of grid_cell_t
     grid_cells.resize(total_grid_count);
+    for (int i = 0; i < total_grid_count; ++i) {
+        // Create a new grid_cell_t instance and assign its pointer to the vector
+        grid_cells[i] = new grid_cell_t();
+    }
+    
 
-    printf("before\n");
-    fflush(stdout);
     // Iterate over all pariticles and place them into their corresponding grid_cell_t
     for (int i = 0; i < num_parts; i++) {
         particle_t* particle = parts + i;
         int block_index = get_block_index(particle);
-        printf("during %d\n", i);
         fflush(stdout);
         grid_cells[block_index]->particles.push_back(particle);
     }
-    printf("after\n");
-    fflush(stdout);
 
     // Link neighboring grid_cell_t
     for (int grid_index = 0; grid_index < total_grid_count; grid_index++) {
