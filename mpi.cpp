@@ -16,7 +16,7 @@ struct grid_cell_t {
     std::vector<int> is_ghost_cell_to; // stores rank indices
     
     grid_cell_t* neighbor_up;
-    grid_cell_t* neightbor_down;    
+    grid_cell_t* neighbor_down;    
     grid_cell_t* neighbor_left_up;
     grid_cell_t* neighbor_right_up;
     grid_cell_t* neighbor_left;
@@ -50,14 +50,8 @@ int get_rank_from_particle_position(int grid_index) {
     return 0;
 }
 
-// Helper function for returning the rank of that a grid cell belongs.
-int get_rank_from_particle_position(int grid_index) {
-    return 0;
-}
-
-
 /*
-*   Core simulation function
+*   Core simulation functions
 */
 
 // Apply the force from neighbor to particle
@@ -116,14 +110,20 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     grid_cell_length = size / grid_dimension;
 
     // Create grid of grid_cell_t
-    std::vector<grid_cell_t> grid_cells(total_grid_count);
+    grid_cells.resize(total_grid_count);
 
+    printf("before\n");
+    fflush(stdout);
     // Iterate over all pariticles and place them into their corresponding grid_cell_t
     for (int i = 0; i < num_parts; i++) {
         particle_t* particle = parts + i;
         int block_index = get_block_index(particle);
-        grid_cells[block_index].particles.push_back(particle);
+        printf("during %d\n", i);
+        fflush(stdout);
+        grid_cells[block_index]->particles.push_back(particle);
     }
+    printf("after\n");
+    fflush(stdout);
 
     // Link neighboring grid_cell_t
     for (int grid_index = 0; grid_index < total_grid_count; grid_index++) {
@@ -132,42 +132,42 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         // Up
         if (row_index > 0) {
             int up_grid_index = grid_index - grid_dimension;
-            grid_cells[grid_index].neighbor_up = grid_cells[up_grid_index];
+            grid_cells[grid_index]->neighbor_up = grid_cells[up_grid_index];
         }
         // Down
         if (row_index + 1 < grid_dimension) {
             int down_grid_index = grid_index + grid_dimension;
-            grid_cells[grid_index].neighbor_down = grid_cells[down_grid_index];
+            grid_cells[grid_index]->neighbor_down = grid_cells[down_grid_index];
         }
         // Left
         if (col_index - 1 >= 0) {
             int left_grid_index = grid_index - 1;
-            grid_cells[grid_index].neighbor_left = grid_cells[left_grid_index];
+            grid_cells[grid_index]->neighbor_left = grid_cells[left_grid_index];
         }
         // Right
         if (col_index + 1 < grid_dimension) {
             int right_grid_index = grid_index + 1;
-            grid_cells[grid_index].neighbor_right = grid_cells[right_grid_index];
+            grid_cells[grid_index]->neighbor_right = grid_cells[right_grid_index];
         }
         // Up-Left
         if (col_index - 1 >= 0 && row_index > 0) {
             int up_left_grid_index = grid_index - grid_dimension - 1;
-            grid_cells[grid_index].neighbor_left_up = grid_cells[up_left_grid_index];
+            grid_cells[grid_index]->neighbor_left_up = grid_cells[up_left_grid_index];
         }
         // Up-Right
         if (col_index + 1 < grid_dimension && row_index > 0) {
             int up_right_grid_index = grid_index - grid_dimension + 1;
-            grid_cells[grid_index].neighbor_right_up = grid_cells[up_right_grid_index];
+            grid_cells[grid_index]->neighbor_right_up = grid_cells[up_right_grid_index];
         }
         // Down-Left
         if (col_index - 1 >= 0 && row_index + 1 < grid_dimension) {
             int down_left_grid_index = grid_index + grid_dimension - 1;
-            grid_cells[grid_index].neighbor_left_down = grid_cells[down_left_grid_index];
+            grid_cells[grid_index]->neighbor_left_down = grid_cells[down_left_grid_index];
         }
         // Down-Right
         if (col_index + 1 < grid_dimension && row_index + 1 < grid_dimension) {
             int up_right_grid_index = grid_index + grid_dimension + 1;
-            grid_cells[grid_index].neighbor_right_down = grid_cells[up_right_grid_index];
+            grid_cells[grid_index]->neighbor_right_down = grid_cells[up_right_grid_index];
         }
     }
 
@@ -179,7 +179,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             // fflush(stdout);
             int curr_grid_index = i + j;
             rank_grid_cells.push_back(grid_cells[curr_grid_index]);
-            grid_cells[curr_grid_index].rank = rank;
+            grid_cells[curr_grid_index]->rank = rank;
         }
     }
 
@@ -206,44 +206,26 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     fflush(stdout);
 
     // For each grid cell object calculate forces between all particles
-    for (int i = 0; i < rank_grid_cells.size(); i += 1) {
         // For particles within current grid cell
-        for () {
             // Intercel force 
-            for () {
                 // Apply force
-            }
-
             // Intracel force
-            for () {
                 // For neighbor particle
-                for () {
                     // Apply force
-                }
-            }
-        }
-    }
 
     // For each grid cell object
-    for (int i = 0; i < rank_grid_cells.size(); i += 1) {
         // Check if ghost region of other rank
             // If True across rank communication
-        
         // For each particle
-        for () {
             // Move
-            move(...)
               // Update particle P to respective grid 
               	// Some particles will no longer be here, we can update regardless or do a check, doesn't matter
-              
             // Afrer move() there will be communication with diff rank
               // In implementation, tally up changes (amount + particle_ids for each neighbor rank)
             // 1. (Universal) If particle moving into another chunk (owned by another rank)
             // 2. (check start grid) If particle started in a gridcell that is in ghost regions of other rank(s)
             // 3. (check end grid) If particle moved into a gridcell that is in ghost regions of other rank(s)
             // Note: two checks for ghost regions, one for starting grid and one for ending grid.
-        }
-    }
   	
   	// Communication section
   		// For each neighbor rank
@@ -270,12 +252,15 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     fflush(stdout);
 
     // Vectors for gathering particles from processors
-    std::vector<particle_t> sending_parts;  // Size depends number of particles owned by each processor
-    std::vector<particle_t> receiving_parts(num_parts); // Size
+    std::vector<particle_t*> sending_parts;  // Size depends number of particles owned by each processor
+    std::vector<particle_t*> receiving_parts(num_parts); // Size
 
     // Add particles from processor to be sent for gathering
-    for (const auto& id : rank_part_ids) {
-        sending_parts.push_back(parts[id]);
+    for (int i = 0; i < rank_grid_cells.size(); i += 1) {
+        std::vector<particle_t*> curr_grid_cell_parts = rank_grid_cells[i]->particles;
+        for (int j = 0; j < curr_grid_cell_parts.size(); j += 1) {
+            sending_parts.push_back(curr_grid_cell_parts[j]);
+        }
     }
 
     // Use variable gather due to particle count varying for each processor
@@ -309,8 +294,8 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     // Create in-order view of all particles, sorted by particle id
     if (rank == 0) {
         for (int i = 0; i < num_parts; i += 1) {
-            particle_t curr_part = receiving_parts[i];
-            parts[curr_part.id - 1] = curr_part;
+            particle_t* curr_part = receiving_parts[i];
+            parts[curr_part->id - 1] = *curr_part;
         }
     }
 
