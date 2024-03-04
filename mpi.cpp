@@ -46,6 +46,8 @@ static int grid_dimension;
 static double grid_cell_length;
 static std::vector<grid_cell_t*> grid_cells;
 static std::vector<grid_cell_t*> rank_grid_cells;
+static std::vector<double> bottom_left_point;
+static std::vector<double> top_right_point;
 
 /*
 * Helper Functions
@@ -61,9 +63,9 @@ int get_grid_cell_rank(int grid_index) {
     return 0;
 }
 
-// Helper function for returning the rank of that a grid cell belongs.
-int get_rank_from_particle_position(int grid_index) {
-    return 0;
+// Helper function for returning the rank of that a particle cell belongs.
+int get_rank_from_particle_position(particle_t* p) {
+    return grid_cells[get_block_index(p)]->rank;
 }
 
 /*
@@ -188,13 +190,38 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     // Assign grid_cell_t for each rank
+    int starting_row = 0;
     for (int k = 0; k < num_procs; k += 1) {
-        for (int i = k * grid_dimension; i < grid_dimension * grid_dimension; i += grid_dimension * num_procs) {
+        int rows_assigned_to_rank = grid_dimension / num_procs; // int division
+        if (grid_dimension % num_procs > k ) { //n rows leftover, assign to first n ranks
+            rows_assigned_to_rank += 1;
+        }
+
+        for (int i = 0; i < rows_assigned_to_rank; i++) {
+            for (int j = 0; j < grid_dimension; j++) {
+                // Compute current grid index and get the corresponding grid_cell_t
+                int curr_grid_index = (i + starting_row) * grid_dimension + j;
+                grid_cell_t* curr_grid_cell = grid_cells[curr_grid_index];
+
+                // Assign rank and index to current grid_cell
+                curr_grid_cell->rank = k;
+                curr_grid_cell->index = curr_grid_index;
+
+                // Add grid_cell to this rank's vector of grid_cell_t
+                if (rank == k) {
+                    rank_grid_cells.push_back(curr_grid_cell);
+                }
+            }
+        }
+        starting_row += rows_assigned_to_rank; // incrementing for next rank's iteration
+
+        /* for (int i = k * grid_dimension; i < grid_dimension * grid_dimension; i += grid_dimension * num_procs) {
             for (int j = 0; (j < grid_dimension) && (i + j < grid_dimension * grid_dimension); j += 1) {
                 // Logging for debugging
                 // printf("index: %d, rank: %d, grid_dimension: %d, num_procs: %d, num_parts: %d,\n", i + j, rank, grid_dimension, num_procs, num_parts);
                 // fflush(stdout);
 
+                
                 // Compute current grid index and get the corresponding grid_cell_t
                 int curr_grid_index = i + j;
                 grid_cell_t* curr_grid_cell = grid_cells[curr_grid_index];
@@ -208,7 +235,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                     rank_grid_cells.push_back(curr_grid_cell);
                 }
             }
-        }
+        } */
     }
 
 
@@ -293,6 +320,44 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     printf("made it to end of init_simulation\n");
 }
 
+// Return a vector of neighbor grid cells. Self-exclusive.
+std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
+    std::vector<grid_cell_t*> neighbor_vector;
+    // left-tup
+    if (grid->neighbor_left_up) {
+        neighbor_vector.push_back(grid->neighbor_left_up);
+    }
+    // up
+    if (grid->neighbor_up) {
+        neighbor_vector.push_back(grid->neighbor_up);
+    }
+    // right-up
+    if (grid->neighbor_right_up) {
+        neighbor_vector.push_back(grid->neighbor_right_up);
+    }
+    // left
+    if (grid->neighbor_left) {
+        neighbor_vector.push_back(grid->neighbor_left);
+    }
+    // right
+    if (grid->neighbor_right) {
+        neighbor_vector.push_back(grid->neighbor_right);
+    }
+    // left-down
+    if (grid->neighbor_left_down) {
+        neighbor_vector.push_back(grid->neighbor_left_down);
+    }
+    // down
+    if (grid->neighbor_down) {
+        neighbor_vector.push_back(grid->neighbor_down);
+    }
+    // right-down
+    if (grid->neighbor_right_down) {
+        neighbor_vector.push_back(grid->neighbor_right_down);
+    }
+}
+
+
 void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
     // Write this function
     printf("simulate_one_step, rank: %d\n", rank);
@@ -305,6 +370,25 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             // Intracel force
                 // For neighbor particle
                     // Apply force
+    for (grid_cell_t* g: rank_grid_cells) {
+        for (particle_t* p: g->particles) {
+            //Forces within the cell
+            for (particle_t* n: g->particles) {
+                apply_force(*p, *n);
+            }
+            //Forces from neighbor cells
+            std::vector<grid_cell_t*> neighbor_grid_cells = get_neighbor_cells(g);
+            for (grid_cell_t* neighbor_g: neighbor_grid_cells){
+                for (particle_t* n: neighbor_g->particles) {
+                    apply_force(*p, *n);
+                }
+            }
+        }
+    }
+
+    // Save particles to send (by p.ID), for each neighbor rank
+    std::vector<std::unordered_set<int>> particle_ids_to_send;
+    particle_ids_to_send.resize(num_procs);
 
     // For each grid cell object
         // Check if ghost region of other rank
@@ -319,7 +403,50 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             // 2. (check start grid) If particle started in a gridcell that is in ghost regions of other rank(s)
             // 3. (check end grid) If particle moved into a gridcell that is in ghost regions of other rank(s)
             // Note: two checks for ghost regions, one for starting grid and one for ending grid.
-  	
+            //       The 3 conditions can occur simultaneously 
+  	for (grid_cell_t* g: rank_grid_cells) {
+        // TODO: simple optimization, maybe have a list of such grid_cells
+        if (g->is_ghost_cell_to.size() > 0) {
+            // Case 2: all particles that started in this grid needs to be communicated
+            for (particle_t* p: g->particles){
+                for (int neighbor_rank: g->is_ghost_cell_to) {
+                    particle_ids_to_send[neighbor_rank].insert(p->id);
+                }
+            }
+        }
+    }
+
+    // A vector of ids of particles owned by this rank. Later used for grid updates.
+    std::vector<int> rank_part_ids_before_move;
+
+    for (grid_cell_t* g: rank_grid_cells) {
+        for (particle_t* p: g->particles) {
+            rank_part_ids_before_move.push_back(p->id);
+            move(*p, size);
+
+            int new_rank = get_rank_from_particle_position(p);
+            if (new_rank != rank) { // Case 1
+                particle_ids_to_send[new_rank].insert(p->id);
+            }
+            grid_cell_t* grid_cell_after_move = grid_cells[get_block_index(p)];
+            if (grid_cell_after_move->is_ghost_cell_to.size() > 0) { // Case 3
+                for (int neighbor_rank: grid_cell_after_move->is_ghost_cell_to) {
+                    particle_ids_to_send[neighbor_rank].insert(p->id);
+                }
+            }
+        }
+    }
+    
+    // Update grids for particles owned by the rank pre-move
+    for (grid_cell_t* g: rank_grid_cells) {
+        g->particles.clear();
+    }
+    for (int part_id: rank_part_ids_before_move) {
+        particle_t* p = parts + (part_id - 1);
+        grid_cells[get_block_index(p)]->particles.push_back(p);
+    }
+
+
   	// Communication section
   		// For each neighbor rank
   			// Put particles meant for that rank into buffer, send to that rank
