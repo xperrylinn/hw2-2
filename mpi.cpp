@@ -212,7 +212,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     }
 
 
-    // TODO: Assign ghost particles
+    // Assign ghost particles
     for (int i = 0; i < rank_grid_cells.size(); i += 1) {
         grid_cell_t* curr_grid_cell = rank_grid_cells[i];
         // Up
@@ -289,16 +289,6 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         }
     }
     
-    // Log the part ids owned by each rank for debugging
-    // printf("rank %d has the following parts: ", rank);
-    // fflush(stdout);
-    // for (int element : rank_part_ids) {
-    //     printf("%d ", element);
-    //     fflush(stdout);
-    // }
-    // printf("\n");
-    // fflush(stdout);
-
     // More logging to confirm end of fxn was reached
     printf("made it to end of init_simulation\n");
 }
