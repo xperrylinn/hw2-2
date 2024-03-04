@@ -213,6 +213,81 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 
 
     // TODO: Assign ghost particles
+    for (int i = 0; i < rank_grid_cells.size(); i += 1) {
+        grid_cell_t* curr_grid_cell = rank_grid_cells[i];
+        // Up
+        if (curr_grid_cell->neighbor_up != NULL && curr_grid_cell->neighbor_up->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_up->particles.begin(),
+                curr_grid_cell->neighbor_up->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_up->index);
+        }
+        // Down
+        if (curr_grid_cell->neighbor_down != NULL && curr_grid_cell->neighbor_down->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(), 
+                curr_grid_cell->neighbor_down->particles.begin(), 
+                curr_grid_cell->neighbor_down->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_down->index);
+        }
+        // Left
+        if (curr_grid_cell->neighbor_left != NULL && curr_grid_cell->neighbor_left->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_left->particles.begin(),
+                curr_grid_cell->neighbor_left->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left->index);
+        }
+        // Right
+        if (curr_grid_cell->neighbor_right != NULL && curr_grid_cell->neighbor_right->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_right->particles.begin(),
+                curr_grid_cell->neighbor_right->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right->index);  
+        }
+        // Up-Left
+        if (curr_grid_cell->neighbor_left_up != NULL && curr_grid_cell->neighbor_left_up->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_left_up->particles.begin(),
+                curr_grid_cell->neighbor_left_up->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left_up->index);
+        }
+        // Up-Right
+        if (curr_grid_cell->neighbor_right_up != NULL && curr_grid_cell->neighbor_right_up->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_right_up->particles.begin(),
+                curr_grid_cell->neighbor_right_up->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right_up->index);
+        }
+        // Down-Left
+        if (curr_grid_cell->neighbor_left_down != NULL && curr_grid_cell->neighbor_left_down->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(),
+                curr_grid_cell->neighbor_left_down->particles.begin(),
+                curr_grid_cell->neighbor_left_down->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left_down->index);
+        }
+        // Down-Right
+        if (curr_grid_cell->neighbor_right_down != NULL && curr_grid_cell->neighbor_right_down->rank != rank) {
+            curr_grid_cell->ghost_particles.insert(
+                curr_grid_cell->ghost_particles.end(), 
+                curr_grid_cell->neighbor_right_down->particles.begin(),
+                curr_grid_cell->neighbor_right_down->particles.end()
+            );
+            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right_down->index);
+        }
+    }
     
     // Log the part ids owned by each rank for debugging
     // printf("rank %d has the following parts: ", rank);

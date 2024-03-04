@@ -1,0 +1,35 @@
+Debug commands in order:
+
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+
+make
+
+file ./mpi
+
+break /global/homes/x/xlinn/hw2-2/mpi.cpp:89
+
+Other helpful debugging commands:
+
+clear /global/homes/x/xlinn/hw2-2/mpi.cpp:34
+
+Commands for running:
+
+srun -N 2 --ntasks-per-node=1 ./mpi -n 10 -s 1
+
+Running correctness:
+
+cd hw2-1
+
+module load cmake
+
+cd build
+
+cmake -DCMAKE_BUILD_TYPE=Release ..
+
+make
+
+salloc -N 1 -C cpu -q interactive -t 01:00:00
+
+./serial -n 10000 -s 1 -o correct.parts.out
+
+~/hw2-correctness/correctness-check.py serial.parts.out correct.parts.out
