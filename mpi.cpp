@@ -188,6 +188,8 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             grid_cells[grid_index]->neighbor_right_down = grid_cells[up_right_grid_index];
         }
     }
+    printf("Size: %f\n", size);
+    fflush(stdout);
 
     // Assign grid_cell_t for each rank
     int starting_row = 0;
@@ -196,6 +198,8 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         if (grid_dimension % num_procs > k ) { //n rows leftover, assign to first n ranks
             rows_assigned_to_rank += 1;
         }
+        printf("Starting_row: %d, k: %d, Rank: %d\n",starting_row, k, rank);
+        fflush(stdout);
 
         for (int i = 0; i < rows_assigned_to_rank; i++) {
             for (int j = 0; j < grid_dimension; j++) {
@@ -214,28 +218,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             }
         }
         starting_row += rows_assigned_to_rank; // incrementing for next rank's iteration
-
-        /* for (int i = k * grid_dimension; i < grid_dimension * grid_dimension; i += grid_dimension * num_procs) {
-            for (int j = 0; (j < grid_dimension) && (i + j < grid_dimension * grid_dimension); j += 1) {
-                // Logging for debugging
-                // printf("index: %d, rank: %d, grid_dimension: %d, num_procs: %d, num_parts: %d,\n", i + j, rank, grid_dimension, num_procs, num_parts);
-                // fflush(stdout);
-
-                
-                // Compute current grid index and get the corresponding grid_cell_t
-                int curr_grid_index = i + j;
-                grid_cell_t* curr_grid_cell = grid_cells[curr_grid_index];
-
-                // Assign rank and index to current grid_cell
-                curr_grid_cell->rank = k;
-                curr_grid_cell->index = curr_grid_index;
-
-                // Add grid_cell to this rank's vector of grid_cell_t
-                if (rank == k) {
-                    rank_grid_cells.push_back(curr_grid_cell);
-                }
-            }
-        } */
+        
     }
 
 
@@ -318,6 +301,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     
     // More logging to confirm end of fxn was reached
     printf("made it to end of init_simulation\n");
+    fflush(stdout);
 }
 
 // Return a vector of neighbor grid cells. Self-exclusive.
@@ -387,6 +371,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
         }
     }
 
+    printf("Done applying forces, rank: %d\n", rank);
+    fflush(stdout);
+
     // Save particles to send (by p.ID), for each neighbor rank
     std::vector<std::unordered_set<int>> particle_ids_to_send;
     particle_ids_to_send.resize(num_procs);
@@ -416,6 +403,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             }
         }
     }
+
+    printf("Done checking ghost_grids, rank: %d\n", rank);
+    fflush(stdout);
 
     // A vector of ids of particles owned by this rank. Later used for grid updates.
     std::vector<int> rank_part_ids_before_move;
@@ -461,14 +451,29 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     MPI_Alloc_mem(num_procs * sizeof(int), MPI_INFO_NULL, &particle_counts_to_send);
     MPI_Alloc_mem(num_procs * sizeof(int), MPI_INFO_NULL, &particle_counts_to_receive);
     for (int target_rank = 0; target_rank < num_procs; target_rank++) {
-        if (target_rank != rank) { // No need to send to self
+        if (target_rank == rank) { // No need to send to self
+            particle_counts_to_send[target_rank] = 0;
+        } else {
             particle_counts_to_send[target_rank] = particle_ids_to_send[target_rank].size();
+            printf("Rank: %d, target_rank: %d, size: %d\n", 
+            rank, target_rank, particle_counts_to_send[target_rank]);
+            fflush(stdout);
         }
     }
+    printf("Counts_to_send[0]: %d, Counts_to_send[1]: %d, Rank: %d\n",
+        particle_counts_to_send[0], particle_counts_to_send[1], rank);
+    printf("Before_alltoall, rank: %d\n", rank);
+    fflush(stdout);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    // Need to barrier here? - is there a better way?
+
     // Use all_to_all, getting the amount of particles to receive from each rank
     MPI_Alltoall(particle_counts_to_send, 1, MPI_INT, \
         particle_counts_to_receive, 1, MPI_INT, MPI_COMM_WORLD);
 
+    printf("After_alltoall, rank: %d\n", rank);
+    fflush(stdout);
     // Prepare send and receive buffers
     std::vector<std::vector<particle_t>> send_buffers; // keys = rank to send to
     std::vector<std::vector<particle_t>> recv_buffers; // keys = rank to receive from
@@ -486,9 +491,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     MPI_Request send_requests[num_procs];
     MPI_Request recv_requests[num_procs];
     for (int r = 0; r < num_procs; r++) {
-        MPI_Isend(&send_buffers[r], send_buffers[r].size(), PARTICLE, \
+        MPI_Isend(&send_buffers[r][0], send_buffers[r].size(), PARTICLE, \
             r, 0, MPI_COMM_WORLD, &send_requests[r]);
-        MPI_Irecv(&recv_buffers[r], recv_buffers[r].size(), PARTICLE, \
+        MPI_Irecv(&recv_buffers[r][0], recv_buffers[r].size(), PARTICLE, \
             r, 0, MPI_COMM_WORLD, &recv_requests[r]);
     }
 
