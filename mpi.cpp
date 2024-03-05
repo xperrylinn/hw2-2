@@ -528,7 +528,7 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     // for (int i = 0; i < num_parts; i += 1) {
     //     printf("id: %d\n", parts[i].id);
     // }
-    printf("made it to beggining of gather_for_save\n");
+    //printf("made it to beggining of gather_for_save\n");
     fflush(stdout);
 
     // Vectors for gathering particles from processors
@@ -553,7 +553,7 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     // Use gather to populate array for specifying count of partilces for each offset
-    printf("rank %d before MPI_Gather\n", rank);
+    //printf("rank %d before MPI_Gather\n", rank);
     fflush(stdout);
     int sending_count = sending_parts.size();
     MPI_Gather(&sending_count, 1, MPI_INT, receiving_counts, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -567,7 +567,7 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     // Variable gather of particles from processors
-    printf("rank %d before MPI_Gatherv\n", rank);
+    //printf("rank %d before MPI_Gatherv\n", rank);
     fflush(stdout);
     MPI_Gatherv(sending_parts.data(), sending_parts.size(), PARTICLE, receiving_parts.data(), receiving_counts, offsets, PARTICLE, 0, MPI_COMM_WORLD);
 
@@ -579,6 +579,6 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
         }
     }
 
-    printf("made it to end of gather_for_save\n");
+    //printf("made it to end of gather_for_save\n");
     fflush(stdout);
 }
