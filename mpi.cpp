@@ -355,6 +355,7 @@ std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
     if (grid->neighbor_right_down) {
         neighbor_vector.push_back(grid->neighbor_right_down);
     }
+    return neighbor_vector;
 }
 
 
@@ -452,11 +453,64 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
   			// Put particles meant for that rank into buffer, send to that rank
   			// MPI_Probe the amount of particles to receive, allocate buffer, receive particles
   			// update local particles in PARTS
-  
-  	// Update rank-local grid_cells
-  		// Clear the previous 
-  		// Loop through particles received
 
+    // First exchange the amount of particles to send/receive
+    int* particle_counts_to_send;
+    int* particle_counts_to_receive;
+
+    MPI_Alloc_mem(num_procs * sizeof(int), MPI_INFO_NULL, &particle_counts_to_send);
+    MPI_Alloc_mem(num_procs * sizeof(int), MPI_INFO_NULL, &particle_counts_to_receive);
+    for (int target_rank = 0; target_rank < num_procs; target_rank++) {
+        if (target_rank != rank) { // No need to send to self
+            particle_counts_to_send[target_rank] = particle_ids_to_send[target_rank].size();
+        }
+    }
+    // Use all_to_all, getting the amount of particles to receive from each rank
+    MPI_Alltoall(particle_counts_to_send, 1, MPI_INT, \
+        particle_counts_to_receive, 1, MPI_INT, MPI_COMM_WORLD);
+
+    // Prepare send and receive buffers
+    std::vector<std::vector<particle_t>> send_buffers; // keys = rank to send to
+    std::vector<std::vector<particle_t>> recv_buffers; // keys = rank to receive from
+    send_buffers.resize(num_procs);
+    recv_buffers.resize(num_procs);
+    // Fill send buffers, resize receive buffers
+    for (int r = 0; r < num_procs; r++) {
+        for (int part_id: particle_ids_to_send[r]) {
+            send_buffers[r].push_back(parts[part_id - 1]);
+        }
+        recv_buffers[r].resize(particle_counts_to_receive[r]);
+    }
+
+    // Async sends and receives
+    MPI_Request send_requests[num_procs];
+    MPI_Request recv_requests[num_procs];
+    for (int r = 0; r < num_procs; r++) {
+        MPI_Isend(&send_buffers[r], send_buffers[r].size(), PARTICLE, \
+            r, 0, MPI_COMM_WORLD, &send_requests[r]);
+        MPI_Irecv(&recv_buffers[r], recv_buffers[r].size(), PARTICLE, \
+            r, 0, MPI_COMM_WORLD, &recv_requests[r]);
+    }
+
+    MPI_Status send_statuses[num_procs];
+    MPI_Status recv_statuses[num_procs];
+    // Wait on all the requests
+    MPI_Waitall(num_procs, send_requests, send_statuses);
+    MPI_Waitall(num_procs, recv_requests, recv_statuses);
+    
+    // For each received particle:
+    //  Update received particles info to local copy in PARTS
+    //  Place into rank-local corresponding grid_cells 
+    for (int r = 0; r < num_procs; r++) {
+        for (particle_t p: recv_buffers[r]) {
+            parts[p.id - 1] = p;
+            int grid_index = get_block_index(&p);
+            grid_cells[grid_index]->particles.push_back(&parts[p.id - 1]);
+        }
+    }
+
+    MPI_Free_mem(particle_counts_to_send);
+    MPI_Free_mem(particle_counts_to_receive);
 }
 
 void gather_for_save(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
