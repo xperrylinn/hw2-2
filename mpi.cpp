@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 #include <unordered_set>
+#include <set>
 
 /*
 * Static global variables
@@ -13,7 +14,7 @@ struct grid_cell_t {
     int index;
     std::vector<particle_t*> particles;
     std::vector<particle_t*> ghost_particles;
-    std::vector<int> is_ghost_cell_to; // stores rank indices
+    std::set<int> is_ghost_cell_to; // stores rank indices
     
     grid_cell_t* neighbor_up;
     grid_cell_t* neighbor_down;    
@@ -188,8 +189,8 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             grid_cells[grid_index]->neighbor_right_down = grid_cells[up_right_grid_index];
         }
     }
-    printf("Size: %f\n", size);
-    fflush(stdout);
+    //printf("Size: %f\n", size);
+    //fflush(stdout);
 
     // Assign grid_cell_t for each rank
     int starting_row = 0;
@@ -198,8 +199,8 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         if (grid_dimension % num_procs > k ) { //n rows leftover, assign to first n ranks
             rows_assigned_to_rank += 1;
         }
-        printf("Starting_row: %d, k: %d, Rank: %d\n",starting_row, k, rank);
-        fflush(stdout);
+        //printf("Starting_row: %d, k: %d, Rank: %d\n",starting_row, k, rank);
+        //fflush(stdout);
 
         for (int i = 0; i < rows_assigned_to_rank; i++) {
             for (int j = 0; j < grid_dimension; j++) {
@@ -221,7 +222,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         
     }
 
-
+    //TODO: consider if we need the ghost_particles attribute
     // Assign ghost particles
     for (int i = 0; i < rank_grid_cells.size(); i += 1) {
         grid_cell_t* curr_grid_cell = rank_grid_cells[i];
@@ -232,7 +233,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_up->particles.begin(),
                 curr_grid_cell->neighbor_up->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_up->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_up->rank);
         }
         // Down
         if (curr_grid_cell->neighbor_down != NULL && curr_grid_cell->neighbor_down->rank != rank) {
@@ -241,7 +242,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_down->particles.begin(), 
                 curr_grid_cell->neighbor_down->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_down->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_down->rank);
         }
         // Left
         if (curr_grid_cell->neighbor_left != NULL && curr_grid_cell->neighbor_left->rank != rank) {
@@ -250,7 +251,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_left->particles.begin(),
                 curr_grid_cell->neighbor_left->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left->rank);
         }
         // Right
         if (curr_grid_cell->neighbor_right != NULL && curr_grid_cell->neighbor_right->rank != rank) {
@@ -259,7 +260,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_right->particles.begin(),
                 curr_grid_cell->neighbor_right->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right->index);  
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right->rank);  
         }
         // Up-Left
         if (curr_grid_cell->neighbor_left_up != NULL && curr_grid_cell->neighbor_left_up->rank != rank) {
@@ -268,7 +269,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_left_up->particles.begin(),
                 curr_grid_cell->neighbor_left_up->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left_up->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_up->rank);
         }
         // Up-Right
         if (curr_grid_cell->neighbor_right_up != NULL && curr_grid_cell->neighbor_right_up->rank != rank) {
@@ -277,7 +278,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_right_up->particles.begin(),
                 curr_grid_cell->neighbor_right_up->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right_up->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_up->rank);
         }
         // Down-Left
         if (curr_grid_cell->neighbor_left_down != NULL && curr_grid_cell->neighbor_left_down->rank != rank) {
@@ -286,7 +287,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_left_down->particles.begin(),
                 curr_grid_cell->neighbor_left_down->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_left_down->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_down->rank);
         }
         // Down-Right
         if (curr_grid_cell->neighbor_right_down != NULL && curr_grid_cell->neighbor_right_down->rank != rank) {
@@ -295,13 +296,13 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 curr_grid_cell->neighbor_right_down->particles.begin(),
                 curr_grid_cell->neighbor_right_down->particles.end()
             );
-            curr_grid_cell->is_ghost_cell_to.push_back(curr_grid_cell->neighbor_right_down->index);
+            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_down->rank);
         }
     }
     
     // More logging to confirm end of fxn was reached
-    printf("made it to end of init_simulation\n");
-    fflush(stdout);
+    //("made it to end of init_simulation\n");
+    //fflush(stdout);
 }
 
 // Return a vector of neighbor grid cells. Self-exclusive.
@@ -345,8 +346,8 @@ std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
 
 void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
     // Write this function
-    printf("simulate_one_step, rank: %d\n", rank);
-    fflush(stdout);
+    //printf("simulate_one_step, rank: %d\n", rank);
+    //fflush(stdout);
 
     // For each grid cell object calculate forces between all particles
         // For particles within current grid cell
@@ -371,11 +372,11 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
         }
     }
 
-    printf("Done applying forces, rank: %d\n", rank);
-    fflush(stdout);
+    //printf("Done applying forces, rank: %d\n", rank);
+    //fflush(stdout);
 
     // Save particles to send (by p.ID), for each neighbor rank
-    std::vector<std::unordered_set<int>> particle_ids_to_send;
+    std::vector<std::unordered_set<u_int64_t>> particle_ids_to_send;
     particle_ids_to_send.resize(num_procs);
 
     // For each grid cell object
@@ -401,11 +402,11 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
                     particle_ids_to_send[neighbor_rank].insert(p->id);
                 }
             }
-        }
+        } 
     }
 
-    printf("Done checking ghost_grids, rank: %d\n", rank);
-    fflush(stdout);
+    //printf("Done checking ghost_grids, rank: %d\n", rank);
+    //fflush(stdout);
 
     // A vector of ids of particles owned by this rank. Later used for grid updates.
     std::vector<int> rank_part_ids_before_move;
@@ -455,15 +456,15 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             particle_counts_to_send[target_rank] = 0;
         } else {
             particle_counts_to_send[target_rank] = particle_ids_to_send[target_rank].size();
-            printf("Rank: %d, target_rank: %d, size: %d\n", 
-            rank, target_rank, particle_counts_to_send[target_rank]);
-            fflush(stdout);
+            //printf("Rank: %d, target_rank: %d, size: %d\n", 
+            //rank, target_rank, particle_counts_to_send[target_rank]);
+            //fflush(stdout);
         }
     }
-    printf("Counts_to_send[0]: %d, Counts_to_send[1]: %d, Rank: %d\n",
-        particle_counts_to_send[0], particle_counts_to_send[1], rank);
-    printf("Before_alltoall, rank: %d\n", rank);
-    fflush(stdout);
+    //printf("Counts_to_send[0]: %d, Counts_to_send[1]: %d, Rank: %d\n",
+    //    particle_counts_to_send[0], particle_counts_to_send[1], rank);
+    //printf("Before_alltoall, rank: %d\n", rank);
+    //fflush(stdout);
 
     MPI_Barrier(MPI_COMM_WORLD);
     // Need to barrier here? - is there a better way?
@@ -472,8 +473,8 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     MPI_Alltoall(particle_counts_to_send, 1, MPI_INT, \
         particle_counts_to_receive, 1, MPI_INT, MPI_COMM_WORLD);
 
-    printf("After_alltoall, rank: %d\n", rank);
-    fflush(stdout);
+    //printf("After_alltoall, rank: %d\n", rank);
+    //fflush(stdout);
     // Prepare send and receive buffers
     std::vector<std::vector<particle_t>> send_buffers; // keys = rank to send to
     std::vector<std::vector<particle_t>> recv_buffers; // keys = rank to receive from
