@@ -528,18 +528,18 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     // for (int i = 0; i < num_parts; i += 1) {
     //     printf("id: %d\n", parts[i].id);
     // }
-    printf("made it to beggining of gather_for_save\n");
-    fflush(stdout);
+    //printf("made it to beggining of gather_for_save\n");
+    //fflush(stdout);
 
     // Vectors for gathering particles from processors
-    std::vector<particle_t*> sending_parts;  // Size depends number of particles owned by each processor
-    std::vector<particle_t*> receiving_parts(num_parts); // Size
+    std::vector<particle_t> sending_parts;  // Size depends number of particles owned by each processor
+    std::vector<particle_t> receiving_parts(num_parts); // Size
 
     // Add particles from processor to be sent for gathering
     for (int i = 0; i < rank_grid_cells.size(); i += 1) {
         std::vector<particle_t*> curr_grid_cell_parts = rank_grid_cells[i]->particles;
         for (int j = 0; j < curr_grid_cell_parts.size(); j += 1) {
-            sending_parts.push_back(curr_grid_cell_parts[j]);
+            sending_parts.push_back(*curr_grid_cell_parts[j]);
         }
     }
 
@@ -553,32 +553,37 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     // Use gather to populate array for specifying count of partilces for each offset
-    printf("rank %d before MPI_Gather\n", rank);
-    fflush(stdout);
+    //printf("rank %d before MPI_Gather\n", rank);
+    //fflush(stdout);
     int sending_count = sending_parts.size();
     MPI_Gather(&sending_count, 1, MPI_INT, receiving_counts, 1, MPI_INT, 0, MPI_COMM_WORLD);
     
     // Build up offsets array
     if (rank == 0) {
         offsets[0] = 0;
-        for (int i = 1; i < num_parts; i += 1) {
+        for (int i = 1; i < num_procs; i += 1) {
             offsets[i] = offsets[i - 1] + receiving_counts[i - 1];
         }
+        //printf("rank: %d, receiving_counts: %d, %d\n", rank, receiving_counts[0], receiving_counts[1]);
+        //printf("rank: %d, offsets: %d, %d\n", rank, offsets[0], offsets[1]);
     }
 
     // Variable gather of particles from processors
-    printf("rank %d before MPI_Gatherv\n", rank);
-    fflush(stdout);
-    MPI_Gatherv(sending_parts.data(), sending_parts.size(), PARTICLE, receiving_parts.data(), receiving_counts, offsets, PARTICLE, 0, MPI_COMM_WORLD);
+    //printf("rank %d before MPI_Gatherv\n", rank);
+    //printf("rank: %d, size: %d\n", rank, sending_parts.size());   
+    //fflush(stdout);
+    MPI_Gatherv(&sending_parts[0], sending_parts.size(), PARTICLE, &receiving_parts[0], receiving_counts, offsets, PARTICLE, 0, MPI_COMM_WORLD);
 
+    //printf("rank %d after MPI_Gatherv\n", rank);
+    //fflush(stdout);
     // Create in-order view of all particles, sorted by particle id
     if (rank == 0) {
         for (int i = 0; i < num_parts; i += 1) {
-            particle_t* curr_part = receiving_parts[i];
-            parts[curr_part->id - 1] = *curr_part;
+            particle_t curr_part = receiving_parts[i];
+            parts[curr_part.id - 1] = curr_part;
         }
     }
 
-    printf("made it to end of gather_for_save\n");
-    fflush(stdout);
+    //printf("made it to end of gather_for_save\n");
+    //fflush(stdout);
 }
