@@ -128,6 +128,10 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     int total_grid_count = grid_dimension * grid_dimension;
     grid_cell_length = size / grid_dimension;
 
+    printf("Grid_dimension: %d\n", grid_dimension);
+    printf("grid_cell_length: %d\n", grid_cell_length);
+    fflush(stdout);
+
     // Create grid of grid_cell_t
     grid_cells.resize(total_grid_count);
     for (int i = 0; i < total_grid_count; ++i) {
@@ -140,7 +144,6 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     for (int i = 0; i < num_parts; i++) {
         particle_t* particle = parts + i;
         int block_index = get_block_index(particle);
-        fflush(stdout);
         grid_cells[block_index]->particles.push_back(particle);
     }
 
@@ -308,7 +311,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 // Return a vector of neighbor grid cells. Self-exclusive.
 std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
     std::vector<grid_cell_t*> neighbor_vector;
-    // left-tup
+    // left-up
     if (grid->neighbor_left_up) {
         neighbor_vector.push_back(grid->neighbor_left_up);
     }
@@ -358,6 +361,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
                     // Apply force
     for (grid_cell_t* g: rank_grid_cells) {
         for (particle_t* p: g->particles) {
+            p->ax = p->ay = 0;
             //Forces within the cell
             for (particle_t* n: g->particles) {
                 apply_force(*p, *n);
