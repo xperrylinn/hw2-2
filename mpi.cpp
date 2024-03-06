@@ -75,6 +75,7 @@ int get_rank_from_particle_position(particle_t* p) {
 
 // Apply the force from neighbor to particle
 void apply_force(particle_t& particle, particle_t& neighbor) {
+
     // Calculate Distance
     double dx = neighbor.x - particle.x;
     double dy = neighbor.y - particle.y;
@@ -130,6 +131,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 
     printf("Grid_dimension: %d\n", grid_dimension);
     printf("grid_cell_length: %d\n", grid_cell_length);
+    printf("total_grid_count: %d\n", grid_dimension);
     fflush(stdout);
 
     // Create grid of grid_cell_t
@@ -347,10 +349,8 @@ std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
 }
 
 
-void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
+void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs, int step) {
     // Write this function
-    //printf("simulate_one_step, rank: %d\n", rank);
-    //fflush(stdout);
 
     // For each grid cell object calculate forces between all particles
         // For particles within current grid cell
@@ -365,13 +365,32 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             //Forces within the cell
             for (particle_t* n: g->particles) {
                 apply_force(*p, *n);
+                if (p->id == 9 && step == 107) {
+                    printf("inter cell - calculating force for part.id %d and neighbor.id %d \n", p->id, n->id);
+                    fflush(stdout);
+                    printf("inter cell - p.x, p.y %f, %f and n.x, n.y %f, %f \n", p->x, p->y, n->x, n->y);
+                    fflush(stdout);
+                }
             }
+    
+
             //Forces from neighbor cells
             std::vector<grid_cell_t*> neighbor_grid_cells = get_neighbor_cells(g);
             for (grid_cell_t* neighbor_g: neighbor_grid_cells){
                 for (particle_t* n: neighbor_g->particles) {
                     apply_force(*p, *n);
+                    if (p->id == 9 && step == 107) {
+                        printf("intra cell - calculating force for part.id %d and neighbor.id %d \n", p->id, n->id);
+                        fflush(stdout);
+                        printf("intra cell - p.x, p.y %f, %f and n.x, n.y %f, %f \n", p->x, p->y, n->x, n->y);
+                        fflush(stdout);
+                    }
                 }
+            }
+
+            if (p->id == 9 && step == 107) {
+                printf("p.x: %f, p.y: %f, p.vx: %f, p.vy: %f, p.ax: %f, p.ay: %f,  \n", p->x, p->y, p->vx, p->vy, p->ax, p->ay);
+                fflush(stdout);
             }
         }
     }
@@ -523,6 +542,12 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
 
     MPI_Free_mem(particle_counts_to_send);
     MPI_Free_mem(particle_counts_to_receive);
+
+    if (step == 107) {
+        printf("p.x: %f, p.y: %f, p.vx: %f, p.vy: %f, p.ax: %f, p.ay: %f,  \n", 
+        parts[8].x, parts[8].y, parts[8].vx, parts[8].vy, parts[8].ax, parts[8].ay);
+        fflush(stdout);
+    }
 }
 
 void gather_for_save(particle_t* parts, int num_parts, double size, int rank, int num_procs) {

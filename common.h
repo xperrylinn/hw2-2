@@ -6,7 +6,7 @@
 
 // Program Constants
 #define nsteps   1000
-#define savefreq 10
+#define savefreq 1
 #define density  0.0005
 #define mass     0.01
 #define cutoff   0.01
@@ -28,7 +28,7 @@ extern MPI_Datatype PARTICLE;
 
 // Simulation routine
 void init_simulation(particle_t* parts, int num_parts, double size, int rank, int num_procs);
-void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs);
+void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs, int step);
 void gather_for_save(particle_t* parts, int num_parts, double size, int rank, int num_procs);
 
 #endif

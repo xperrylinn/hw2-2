@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     init_simulation(parts, num_parts, size, rank, num_procs);
 
     for (int step = 0; step < nsteps; ++step) {
-        simulate_one_step(parts, num_parts, size, rank, num_procs);
+        simulate_one_step(parts, num_parts, size, rank, num_procs, step);
 
         // Save state if necessary
         if (fsave.good() && (step % savefreq) == 0) {
