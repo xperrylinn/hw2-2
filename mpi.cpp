@@ -16,6 +16,7 @@ struct grid_cell_t {
     std::vector<particle_t*> ghost_particles;
     std::set<int> is_ghost_cell_to; // stores rank indices
     
+    std::vector<grid_cell_t*> neighbor_grids;
     grid_cell_t* neighbor_up;
     grid_cell_t* neighbor_down;    
     grid_cell_t* neighbor_left_up;
@@ -155,41 +156,49 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         if (row_index > 0) {
             int up_grid_index = grid_index - grid_dimension;
             grid_cells[grid_index]->neighbor_up = grid_cells[up_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_grid_index]);
         }
         // Down
         if (row_index + 1 < grid_dimension) {
             int down_grid_index = grid_index + grid_dimension;
             grid_cells[grid_index]->neighbor_down = grid_cells[down_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[down_grid_index]);
         }
         // Left
         if (col_index - 1 >= 0) {
             int left_grid_index = grid_index - 1;
             grid_cells[grid_index]->neighbor_left = grid_cells[left_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[left_grid_index]);
         }
         // Right
         if (col_index + 1 < grid_dimension) {
             int right_grid_index = grid_index + 1;
             grid_cells[grid_index]->neighbor_right = grid_cells[right_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[right_grid_index]);
         }
         // Up-Left
         if (col_index - 1 >= 0 && row_index > 0) {
             int up_left_grid_index = grid_index - grid_dimension - 1;
             grid_cells[grid_index]->neighbor_left_up = grid_cells[up_left_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_left_grid_index]);
         }
         // Up-Right
         if (col_index + 1 < grid_dimension && row_index > 0) {
             int up_right_grid_index = grid_index - grid_dimension + 1;
             grid_cells[grid_index]->neighbor_right_up = grid_cells[up_right_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_right_grid_index]);
         }
         // Down-Left
         if (col_index - 1 >= 0 && row_index + 1 < grid_dimension) {
             int down_left_grid_index = grid_index + grid_dimension - 1;
             grid_cells[grid_index]->neighbor_left_down = grid_cells[down_left_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[down_left_grid_index]);
         }
         // Down-Right
         if (col_index + 1 < grid_dimension && row_index + 1 < grid_dimension) {
             int up_right_grid_index = grid_index + grid_dimension + 1;
             grid_cells[grid_index]->neighbor_right_down = grid_cells[up_right_grid_index];
+            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_right_grid_index]);
         }
     }
     //printf("Size: %f\n", size);
@@ -225,7 +234,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         
     }
 
-    //TODO: consider if we need the ghost_particles attribute
+    //TODO: consider using window
     // Assign ghost particles AND update is_ghost_cell_to
     for (int i = 0; i < grid_cells.size(); i += 1) {
         grid_cell_t* curr_grid_cell = grid_cells[i];
@@ -303,39 +312,8 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 // Return a vector of neighbor grid cells. Self-exclusive.
 std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
     std::vector<grid_cell_t*> neighbor_vector;
-    // left-up
-    if (grid->neighbor_left_up) {
-        neighbor_vector.push_back(grid->neighbor_left_up);
-    }
-    // up
-    if (grid->neighbor_up) {
-        neighbor_vector.push_back(grid->neighbor_up);
-    }
-    // right-up
-    if (grid->neighbor_right_up) {
-        neighbor_vector.push_back(grid->neighbor_right_up);
-    }
-    // left
-    if (grid->neighbor_left) {
-        neighbor_vector.push_back(grid->neighbor_left);
-    }
-    // right
-    if (grid->neighbor_right) {
-        neighbor_vector.push_back(grid->neighbor_right);
-    }
-    // left-down
-    if (grid->neighbor_left_down) {
-        neighbor_vector.push_back(grid->neighbor_left_down);
-    }
-    // down
-    if (grid->neighbor_down) {
-        neighbor_vector.push_back(grid->neighbor_down);
-    }
-    // right-down
-    if (grid->neighbor_right_down) {
-        neighbor_vector.push_back(grid->neighbor_right_down);
-    }
-    return neighbor_vector;
+    
+    return grid->neighbor_grids;
 }
 
 
@@ -356,10 +334,9 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             p->ax = p->ay = 0;
             //Forces within the cell
             for (particle_t* n: g->particles) {
-                apply_force(*p, *n);
-                
+                apply_force(*p, *n);                
             }
-    
+
 
             //Forces from neighbor cells
             std::vector<grid_cell_t*> neighbor_grid_cells = get_neighbor_cells(g);
@@ -471,7 +448,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     //printf("Before_alltoall, rank: %d\n", rank);
     //fflush(stdout);
 
-    MPI_Barrier(MPI_COMM_WORLD);
     // Need to barrier here? - is there a better way?
 
     // Use all_to_all, getting the amount of particles to receive from each rank
