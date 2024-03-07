@@ -47,6 +47,7 @@ static int grid_dimension;
 static double grid_cell_length;
 static std::vector<grid_cell_t*> grid_cells;
 static std::vector<grid_cell_t*> rank_grid_cells;
+static std::vector<grid_cell_t *> rank_ghost_grid_cells;
 static std::vector<double> bottom_left_point;
 static std::vector<double> top_right_point;
 
@@ -130,7 +131,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     grid_cell_length = size / grid_dimension;
 
     printf("Grid_dimension: %d\n", grid_dimension);
-    printf("grid_cell_length: %d\n", grid_cell_length);
+    printf("grid_cell_length: %f\n", grid_cell_length);
     printf("total_grid_count: %d\n", grid_dimension);
     fflush(stdout);
 
@@ -228,82 +229,74 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     //TODO: consider if we need the ghost_particles attribute
-    // Assign ghost particles
-    for (int i = 0; i < rank_grid_cells.size(); i += 1) {
-        grid_cell_t* curr_grid_cell = rank_grid_cells[i];
+    // Assign ghost particles AND update is_ghost_cell_to
+    for (int i = 0; i < grid_cells.size(); i += 1) {
+        grid_cell_t* curr_grid_cell = grid_cells[i];
         // Up
-        if (curr_grid_cell->neighbor_up != NULL && curr_grid_cell->neighbor_up->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_up->particles.begin(),
-                curr_grid_cell->neighbor_up->particles.end()
-            );
+        if (curr_grid_cell->neighbor_up != NULL && curr_grid_cell->neighbor_up->rank != curr_grid_cell->rank) {
+
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_up->rank);
+            curr_grid_cell->neighbor_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_up);
         }
         // Down
-        if (curr_grid_cell->neighbor_down != NULL && curr_grid_cell->neighbor_down->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(), 
-                curr_grid_cell->neighbor_down->particles.begin(), 
-                curr_grid_cell->neighbor_down->particles.end()
-            );
+        if (curr_grid_cell->neighbor_down != NULL && curr_grid_cell->neighbor_down->rank != curr_grid_cell->rank) {
+
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_down->rank);
+            curr_grid_cell->neighbor_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_down);
         }
         // Left
-        if (curr_grid_cell->neighbor_left != NULL && curr_grid_cell->neighbor_left->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_left->particles.begin(),
-                curr_grid_cell->neighbor_left->particles.end()
-            );
+        if (curr_grid_cell->neighbor_left != NULL && curr_grid_cell->neighbor_left->rank != curr_grid_cell->rank) {
+
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left->rank);
+            curr_grid_cell->neighbor_left->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left);
         }
         // Right
-        if (curr_grid_cell->neighbor_right != NULL && curr_grid_cell->neighbor_right->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_right->particles.begin(),
-                curr_grid_cell->neighbor_right->particles.end()
-            );
+        if (curr_grid_cell->neighbor_right != NULL && curr_grid_cell->neighbor_right->rank != curr_grid_cell->rank) {
+
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right->rank);  
+            curr_grid_cell->neighbor_right->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right);
         }
         // Up-Left
-        if (curr_grid_cell->neighbor_left_up != NULL && curr_grid_cell->neighbor_left_up->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_left_up->particles.begin(),
-                curr_grid_cell->neighbor_left_up->particles.end()
-            );
+        if (curr_grid_cell->neighbor_left_up != NULL && curr_grid_cell->neighbor_left_up->rank != curr_grid_cell->rank) {
+
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_up->rank);
+            curr_grid_cell->neighbor_left_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left_up);
         }
         // Up-Right
-        if (curr_grid_cell->neighbor_right_up != NULL && curr_grid_cell->neighbor_right_up->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_right_up->particles.begin(),
-                curr_grid_cell->neighbor_right_up->particles.end()
-            );
+        if (curr_grid_cell->neighbor_right_up != NULL && curr_grid_cell->neighbor_right_up->rank != curr_grid_cell->rank) {
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_up->rank);
+            curr_grid_cell->neighbor_right_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right_up);
         }
         // Down-Left
-        if (curr_grid_cell->neighbor_left_down != NULL && curr_grid_cell->neighbor_left_down->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(),
-                curr_grid_cell->neighbor_left_down->particles.begin(),
-                curr_grid_cell->neighbor_left_down->particles.end()
-            );
+        if (curr_grid_cell->neighbor_left_down != NULL && curr_grid_cell->neighbor_left_down->rank != curr_grid_cell->rank) {
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_down->rank);
+            curr_grid_cell->neighbor_left_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left_down);
         }
         // Down-Right
-        if (curr_grid_cell->neighbor_right_down != NULL && curr_grid_cell->neighbor_right_down->rank != rank) {
-            curr_grid_cell->ghost_particles.insert(
-                curr_grid_cell->ghost_particles.end(), 
-                curr_grid_cell->neighbor_right_down->particles.begin(),
-                curr_grid_cell->neighbor_right_down->particles.end()
-            );
+        if (curr_grid_cell->neighbor_right_down != NULL && curr_grid_cell->neighbor_right_down->rank != curr_grid_cell->rank) {
+            //Updates is_ghost_cell_to
             curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_down->rank);
+            curr_grid_cell->neighbor_right_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
+            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right_down);
         }
     }
+
+    for (int i = 0; i < grid_cells.size(); i += 1) {
+        grid_cell_t* curr_grid_cell = grid_cells[i];
+        printf("Rank: %d, cell_id: %d, is_ghost_cell_to count: %d\n", 
+        rank, curr_grid_cell->index, curr_grid_cell->is_ghost_cell_to.size());
+        if (curr_grid_cell->is_ghost_cell_to.size() > 0) {
+            printf("Ghost cell of rank: %d\n", *curr_grid_cell->is_ghost_cell_to.begin());
+        }
+    }
+    fflush(stdout);
     
     // More logging to confirm end of fxn was reached
     //("made it to end of init_simulation\n");
@@ -359,8 +352,23 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             // Intracel force
                 // For neighbor particle
                     // Apply force
+    if (step == 106) {
+        printf("Rank: %d\n", rank);
+        printf("step: %d\n", step);
+        printf("Particle id == 9, grid_id: %d, rank: %d\n", get_block_index(parts + 8), get_rank_from_particle_position(parts + 8));
+        printf("Particle id == 1, grid_id: %d, rank: %d\n", get_block_index(parts + 0), get_rank_from_particle_position(parts));
+        printf("Particle id == 1, positions (x,y): %f, %f\n", parts[0].x, parts[0].y);
+        printf("is_ghost_cell_to for particle 1: %d\n", grid_cells[get_block_index(parts + 0)]->is_ghost_cell_to.size());
+        fflush(stdout);
+    }
     for (grid_cell_t* g: rank_grid_cells) {
         for (particle_t* p: g->particles) {
+            if (p->id == 9 && step == 107) {
+                printf("Rank: %d\n", rank);
+                printf("Particle id == 9, grid_id: %d\n", get_block_index(p));
+                printf("Particle id == 1, grid_id: %d\n", get_block_index(parts + 0));
+                fflush(stdout);
+            }
             p->ax = p->ay = 0;
             //Forces within the cell
             for (particle_t* n: g->particles) {
@@ -376,6 +384,23 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
 
             //Forces from neighbor cells
             std::vector<grid_cell_t*> neighbor_grid_cells = get_neighbor_cells(g);
+            if (p->id == 9 && step == 107) {
+                printf("Neighbor vector size: %d\n Neighbor grid cell ids: ", neighbor_grid_cells.size());
+                for (int i = 0; i < neighbor_grid_cells.size(); i++) {
+                    printf("%d ", neighbor_grid_cells[i]->index);
+                }
+                printf("\n");
+
+                printf("Particles in neighbor cells: \n");
+                for (int i = 0; i < neighbor_grid_cells.size(); i++) {
+                    printf("Neighbor cell index %d:", neighbor_grid_cells[i]->index);
+                    for (int j = 0; j < neighbor_grid_cells[i]->particles.size(); j++) {
+                        printf(" %d, ", neighbor_grid_cells[i]->particles[j]->id);
+                    }
+                    printf("\n");
+                }
+                fflush(stdout);
+            }
             for (grid_cell_t* neighbor_g: neighbor_grid_cells){
                 for (particle_t* n: neighbor_g->particles) {
                     apply_force(*p, *n);
@@ -458,9 +483,10 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     }
     for (int part_id: rank_part_ids_before_move) {
         particle_t* p = parts + (part_id - 1);
-        if (get_rank_from_particle_position(p) == rank) {
-            grid_cells[get_block_index(p)]->particles.push_back(p);
-        }
+        grid_cells[get_block_index(p)]->particles.push_back(p);
+        // TODO: Update if:
+        // 1. Still in chunk owned by this rank
+        // 2. If in ghost zone of this rank.
     }
 
 
