@@ -13,35 +13,16 @@ struct grid_cell_t {
     int rank;
     int index;
     std::vector<particle_t*> particles;
-    std::vector<particle_t*> ghost_particles;
     std::set<int> is_ghost_cell_to; // stores rank indices
-    
     std::vector<grid_cell_t*> neighbor_grids;
-    grid_cell_t* neighbor_up;
-    grid_cell_t* neighbor_down;    
-    grid_cell_t* neighbor_left_up;
-    grid_cell_t* neighbor_right_up;
-    grid_cell_t* neighbor_left;
-    grid_cell_t* neighbor_right;
-    grid_cell_t* neighbor_left_down;
-    grid_cell_t* neighbor_right_down;
 
     // Constructor to initialize member vectors
     grid_cell_t() 
         : rank(0), 
           index(0),
           particles(),  // Initialize particle vector (empty)
-          ghost_particles(),  // Initialize ghost_particle vector (empty)
           is_ghost_cell_to(), // Initialize is_ghost_cell_to vector (empty)
-          neighbor_up(nullptr),
-          neighbor_down(nullptr),
-          neighbor_left_up(nullptr),
-          neighbor_right_up(nullptr),
-          neighbor_left(nullptr),
-          neighbor_right(nullptr),
-          neighbor_left_down(nullptr),
-          neighbor_right_down(nullptr) {}
-
+          neighbor_grids() {} 
 };
 
 static int grid_dimension;
@@ -148,71 +129,14 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         grid_cells[block_index]->particles.push_back(particle);
     }
 
-    // Link neighboring grid_cell_t
-    for (int grid_index = 0; grid_index < total_grid_count; grid_index++) {
-        int col_index = grid_index % grid_dimension;
-        int row_index = grid_index / grid_dimension;
-        // Up
-        if (row_index > 0) {
-            int up_grid_index = grid_index - grid_dimension;
-            grid_cells[grid_index]->neighbor_up = grid_cells[up_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_grid_index]);
-        }
-        // Down
-        if (row_index + 1 < grid_dimension) {
-            int down_grid_index = grid_index + grid_dimension;
-            grid_cells[grid_index]->neighbor_down = grid_cells[down_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[down_grid_index]);
-        }
-        // Left
-        if (col_index - 1 >= 0) {
-            int left_grid_index = grid_index - 1;
-            grid_cells[grid_index]->neighbor_left = grid_cells[left_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[left_grid_index]);
-        }
-        // Right
-        if (col_index + 1 < grid_dimension) {
-            int right_grid_index = grid_index + 1;
-            grid_cells[grid_index]->neighbor_right = grid_cells[right_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[right_grid_index]);
-        }
-        // Up-Left
-        if (col_index - 1 >= 0 && row_index > 0) {
-            int up_left_grid_index = grid_index - grid_dimension - 1;
-            grid_cells[grid_index]->neighbor_left_up = grid_cells[up_left_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_left_grid_index]);
-        }
-        // Up-Right
-        if (col_index + 1 < grid_dimension && row_index > 0) {
-            int up_right_grid_index = grid_index - grid_dimension + 1;
-            grid_cells[grid_index]->neighbor_right_up = grid_cells[up_right_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_right_grid_index]);
-        }
-        // Down-Left
-        if (col_index - 1 >= 0 && row_index + 1 < grid_dimension) {
-            int down_left_grid_index = grid_index + grid_dimension - 1;
-            grid_cells[grid_index]->neighbor_left_down = grid_cells[down_left_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[down_left_grid_index]);
-        }
-        // Down-Right
-        if (col_index + 1 < grid_dimension && row_index + 1 < grid_dimension) {
-            int up_right_grid_index = grid_index + grid_dimension + 1;
-            grid_cells[grid_index]->neighbor_right_down = grid_cells[up_right_grid_index];
-            grid_cells[grid_index]->neighbor_grids.push_back(grid_cells[up_right_grid_index]);
-        }
-    }
-    //printf("Size: %f\n", size);
-    //fflush(stdout);
-
     // Assign grid_cell_t for each rank
+    // TODO: this needs to change for different domain division methods
     int starting_row = 0;
     for (int k = 0; k < num_procs; k += 1) {
         int rows_assigned_to_rank = grid_dimension / num_procs; // int division
         if (grid_dimension % num_procs > k ) { //n rows leftover, assign to first n ranks
             rows_assigned_to_rank += 1;
         }
-        //printf("Starting_row: %d, k: %d, Rank: %d\n",starting_row, k, rank);
-        //fflush(stdout);
 
         for (int i = 0; i < rows_assigned_to_rank; i++) {
             for (int j = 0; j < grid_dimension; j++) {
@@ -230,79 +154,48 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
                 }
             }
         }
-        starting_row += rows_assigned_to_rank; // incrementing for next rank's iteration
+        starting_row += rows_assigned_to_rank; // incrementing for next rank's iteration 
+    }
+
+    //"linking" grid_cells
+    for (int g = 0; g < total_grid_count; g++) {
+        int col_index = g % grid_dimension;
+        int row_index = g / grid_dimension;
+        int row_min = fmax(0, row_index - 1);
+        int row_max = fmin(grid_dimension - 1, row_index + 1);
+        int col_min = fmax(0, col_index - 1);
+        int col_max = fmin(grid_dimension - 1, col_index + 1);
+
         
-    }
-
-    //TODO: consider using window
-    // Assign ghost particles AND update is_ghost_cell_to
-    for (int i = 0; i < grid_cells.size(); i += 1) {
-        grid_cell_t* curr_grid_cell = grid_cells[i];
-        // Up
-        if (curr_grid_cell->neighbor_up != NULL && curr_grid_cell->neighbor_up->rank != curr_grid_cell->rank) {
-
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_up->rank);
-            curr_grid_cell->neighbor_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_up);
+        if (col_index < grid_dimension - 1) {
+            for (int row = row_min; row <= row_max; row++) {
+                int neighbor_grid_index = col_index + 1 + row * grid_dimension;
+                
+                grid_cells[g]->neighbor_grids.push_back(grid_cells[neighbor_grid_index]);
+                grid_cells[neighbor_grid_index]->neighbor_grids.push_back(grid_cells[g]);
+            }
         }
-        // Down
-        if (curr_grid_cell->neighbor_down != NULL && curr_grid_cell->neighbor_down->rank != curr_grid_cell->rank) {
-
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_down->rank);
-            curr_grid_cell->neighbor_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_down);
-        }
-        // Left
-        if (curr_grid_cell->neighbor_left != NULL && curr_grid_cell->neighbor_left->rank != curr_grid_cell->rank) {
-
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left->rank);
-            curr_grid_cell->neighbor_left->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left);
-        }
-        // Right
-        if (curr_grid_cell->neighbor_right != NULL && curr_grid_cell->neighbor_right->rank != curr_grid_cell->rank) {
-
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right->rank);  
-            curr_grid_cell->neighbor_right->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right);
-        }
-        // Up-Left
-        if (curr_grid_cell->neighbor_left_up != NULL && curr_grid_cell->neighbor_left_up->rank != curr_grid_cell->rank) {
-
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_up->rank);
-            curr_grid_cell->neighbor_left_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left_up);
-        }
-        // Up-Right
-        if (curr_grid_cell->neighbor_right_up != NULL && curr_grid_cell->neighbor_right_up->rank != curr_grid_cell->rank) {
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_up->rank);
-            curr_grid_cell->neighbor_right_up->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right_up);
-        }
-        // Down-Left
-        if (curr_grid_cell->neighbor_left_down != NULL && curr_grid_cell->neighbor_left_down->rank != curr_grid_cell->rank) {
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_left_down->rank);
-            curr_grid_cell->neighbor_left_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_left_down);
-        }
-        // Down-Right
-        if (curr_grid_cell->neighbor_right_down != NULL && curr_grid_cell->neighbor_right_down->rank != curr_grid_cell->rank) {
-            //Updates is_ghost_cell_to
-            curr_grid_cell->is_ghost_cell_to.insert(curr_grid_cell->neighbor_right_down->rank);
-            curr_grid_cell->neighbor_right_down->is_ghost_cell_to.insert(curr_grid_cell->rank);
-            rank_ghost_grid_cells.push_back(curr_grid_cell->neighbor_right_down);
+        if (row_index > 0) {
+            int neighbor_grid_index = g - grid_dimension;
+            grid_cells[g]->neighbor_grids.push_back(grid_cells[neighbor_grid_index]);
+            grid_cells[neighbor_grid_index]->neighbor_grids.push_back(grid_cells[g]);
         }
     }
 
-    /* for (int i = 0; i < grid_cells.size(); i += 1) {
-        grid_cell_t* curr_grid_cell = grid_cells[i];
-        printf("Rank: %d, cell_id: %d, is_ghost_cell_to count: %d\n", 
-        rank, curr_grid_cell->index, curr_grid_cell->is_ghost_cell_to.size());
-        if (curr_grid_cell->is_ghost_cell_to.size() > 0) {
-            printf("Ghost cell of rank: %d\n", *curr_grid_cell->is_ghost_cell_to.begin());
+    //Updating is_ghost_to
+    for (int g = 0; g < total_grid_count; g++) {
+        grid_cell_t* curr_grid_cell = grid_cells[g];
+        for (grid_cell_t* neighbor_g: curr_grid_cell->neighbor_grids) {
+            if (curr_grid_cell->rank != neighbor_g->rank) {
+                curr_grid_cell->is_ghost_cell_to.insert(neighbor_g->rank);
+                neighbor_g->is_ghost_cell_to.insert(curr_grid_cell->rank);
+                
+                rank_ghost_grid_cells.push_back(neighbor_g);
+                //TODO: one way is ok if iterating through all grids
+            }
         }
     }
-    fflush(stdout); */
+    
     
     // More logging to confirm end of fxn was reached
     //printf("made it to end of init_simulation\n");
