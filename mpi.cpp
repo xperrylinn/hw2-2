@@ -458,6 +458,7 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     for (int target_rank = 0; target_rank < num_procs; target_rank++) {
         if (target_rank == rank) { // No need to send to self
             particle_counts_to_send[target_rank] = 0;
+            particle_ids_to_send[target_rank].clear();
         } else {
             particle_counts_to_send[target_rank] = particle_ids_to_send[target_rank].size();
             //printf("Rank: %d, target_rank: %d, size: %d\n", 
@@ -493,20 +494,42 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     }
 
     // Async sends and receives
-    MPI_Request send_requests[num_procs];
-    MPI_Request recv_requests[num_procs];
+
+    //MPI_Request send_requests[num_procs];
+    //MPI_Request recv_requests[num_procs];
+
+    std::vector<MPI_Request> send_requests;
+    std::vector<MPI_Request> recv_requests;
+
+    int total_sends = 0;
+    int total_recvs = 0;
     for (int r = 0; r < num_procs; r++) {
-        MPI_Isend(&send_buffers[r][0], send_buffers[r].size(), PARTICLE, \
-            r, 0, MPI_COMM_WORLD, &send_requests[r]);
-        MPI_Irecv(&recv_buffers[r][0], recv_buffers[r].size(), PARTICLE, \
-            r, 0, MPI_COMM_WORLD, &recv_requests[r]);
+        if (particle_counts_to_send[r] > 0) {
+            MPI_Request send_r;
+            MPI_Isend(&send_buffers[r][0], send_buffers[r].size(), PARTICLE, \
+                r, 0, MPI_COMM_WORLD, &send_r);
+            send_requests.push_back(send_r);
+            total_sends += 1;
+        }
+        if (particle_counts_to_receive[r] > 0) {
+            MPI_Request recv_r;
+            MPI_Irecv(&recv_buffers[r][0], recv_buffers[r].size(), PARTICLE, \
+                r, 0, MPI_COMM_WORLD, &recv_r);
+            recv_requests.push_back(recv_r);
+            total_recvs += 1;
+        }
     }
 
-    MPI_Status send_statuses[num_procs];
-    MPI_Status recv_statuses[num_procs];
+    MPI_Status send_statuses[total_sends];
+    MPI_Status recv_statuses[total_recvs];
+    
     // Wait on all the requests
-    MPI_Waitall(num_procs, send_requests, send_statuses);
-    MPI_Waitall(num_procs, recv_requests, recv_statuses);
+    if (send_requests.size() > 0) {
+        MPI_Waitall(total_sends, &send_requests[0], send_statuses);
+    }
+    if (recv_requests.size() > 0) {
+        MPI_Waitall(total_recvs, &recv_requests[0], recv_statuses);
+    }
     
     // For each received particle:
     //  Update received particles info to local copy in PARTS
@@ -521,7 +544,6 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
 
     MPI_Free_mem(particle_counts_to_send);
     MPI_Free_mem(particle_counts_to_receive);
-
 }
 
 void gather_for_save(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
@@ -587,6 +609,8 @@ void gather_for_save(particle_t* parts, int num_parts, double size, int rank, in
             particle_t curr_part = receiving_parts[i];
             parts[curr_part.id - 1] = curr_part;
         }
+        delete receiving_counts;
+        delete offsets;
     }
 
     //printf("made it to end of gather_for_save\n");
