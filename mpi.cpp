@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_set>
 #include <set>
+#include <algorithm>
 
 /*
 * Static global variables
@@ -29,7 +30,8 @@ static int grid_dimension;
 static double grid_cell_length;
 static std::vector<grid_cell_t*> grid_cells;
 static std::vector<grid_cell_t*> rank_grid_cells;
-static std::vector<grid_cell_t *> rank_ghost_grid_cells;
+static std::unordered_set<grid_cell_t *> rank_ghost_grid_cells;
+static std::vector<grid_cell_t *> rank_grid_cells_that_are_ghost;
 static std::vector<double> bottom_left_point;
 static std::vector<double> top_right_point;
 
@@ -166,7 +168,6 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
         int col_min = fmax(0, col_index - 1);
         int col_max = fmin(grid_dimension - 1, col_index + 1);
 
-        
         if (col_index < grid_dimension - 1) {
             for (int row = row_min; row <= row_max; row++) {
                 int neighbor_grid_index = col_index + 1 + row * grid_dimension;
@@ -185,17 +186,23 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     //Updating is_ghost_to
     for (int g = 0; g < total_grid_count; g++) {
         grid_cell_t* curr_grid_cell = grid_cells[g];
-        for (grid_cell_t* neighbor_g: curr_grid_cell->neighbor_grids) {
-            if (curr_grid_cell->rank != neighbor_g->rank) {
-                curr_grid_cell->is_ghost_cell_to.insert(neighbor_g->rank);
-                neighbor_g->is_ghost_cell_to.insert(curr_grid_cell->rank);
-                
-                rank_ghost_grid_cells.push_back(neighbor_g);
-                //TODO: one way is ok if iterating through all grids
+        for (grid_cell_t* neighbor_grid_cell: curr_grid_cell->neighbor_grids) {
+            if (curr_grid_cell->rank != neighbor_grid_cell->rank) {
+                curr_grid_cell->is_ghost_cell_to.insert(neighbor_grid_cell->rank);
+
+                //TODO: one way is ok if iterating through all grids, since neighborhood is always mutual
+                //neighbor_g->is_ghost_cell_to.insert(curr_grid_cell->rank);
+                rank_ghost_grid_cells.insert(neighbor_grid_cell);  
             }
         }
     }
-    
+
+    //Update rank_grid_cells_that_are_ghost (aka cells owned by this rank, and is a ghost cell to some other rank)
+    for (grid_cell_t* g: rank_grid_cells) {
+        if (g->is_ghost_cell_to.size() > 0) {
+            rank_grid_cells_that_are_ghost.push_back(g);
+        }
+    }
     
     // More logging to confirm end of fxn was reached
     //printf("made it to end of init_simulation\n");
@@ -222,19 +229,15 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
                     // Apply force
     
     for (grid_cell_t* g: rank_grid_cells) {
-        for (particle_t* p: g->particles) {
-            
+        for (particle_t* p: g->particles) {    
             p->ax = p->ay = 0;
             //Forces within the cell
             for (particle_t* n: g->particles) {
                 apply_force(*p, *n);                
             }
 
-
-            //Forces from neighbor cells
-            std::vector<grid_cell_t*> neighbor_grid_cells = get_neighbor_cells(g);
-            
-            for (grid_cell_t* neighbor_g: neighbor_grid_cells){
+            //Forces from neighbor cells            
+            for (grid_cell_t* neighbor_g: g->neighbor_grids){
                 for (particle_t* n: neighbor_g->particles) {
                     apply_force(*p, *n);
                     
@@ -264,16 +267,15 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             // 3. (check end grid) If particle moved into a gridcell that is in ghost regions of other rank(s)
             // Note: two checks for ghost regions, one for starting grid and one for ending grid.
             //       The 3 conditions can occur simultaneously 
-  	for (grid_cell_t* g: rank_grid_cells) {
-        // TODO: simple optimization, maybe have a list of such grid_cells
-        if (g->is_ghost_cell_to.size() > 0) {
-            // Case 2: all particles that started in this grid needs to be communicated
-            for (particle_t* p: g->particles){
-                for (int neighbor_rank: g->is_ghost_cell_to) {
-                    particle_ids_to_send[neighbor_rank].insert(p->id);
-                }
+
+
+    for (grid_cell_t* g: rank_grid_cells_that_are_ghost) {
+        // Case 2: all particles that started in this grid needs to be communicated
+        for (particle_t* p: g->particles){
+            for (int neighbor_rank: g->is_ghost_cell_to) {
+                particle_ids_to_send[neighbor_rank].insert(p->id);
             }
-        } 
+        }
     }
 
     //printf("Done checking ghost_grids, rank: %d\n", rank);
@@ -306,10 +308,14 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     }
     for (int part_id: rank_part_ids_before_move) {
         particle_t* p = parts + (part_id - 1);
-        grid_cells[get_block_index(p)]->particles.push_back(p);
-        // TODO: Update if:
+        
+        // Update if:
         // 1. Still in chunk owned by this rank
-        // 2. If in ghost zone of this rank.
+        // 2. If it is in ghost zone of this rank.
+        grid_cell_t* g = grid_cells[get_block_index(p)];
+        if (g->rank == rank || rank_ghost_grid_cells.find(g) != rank_ghost_grid_cells.end()) {
+            grid_cells[get_block_index(p)]->particles.push_back(p);
+        }
     }
 
 
