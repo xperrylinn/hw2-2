@@ -111,17 +111,18 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     int total_grid_count = grid_dimension * grid_dimension;
     grid_cell_length = size / grid_dimension;
 
-    printf("Grid_dimension: %d\n", grid_dimension);
+    /* printf("Grid_dimension: %d\n", grid_dimension);
     printf("grid_cell_length: %f\n", grid_cell_length);
     printf("total_grid_count: %d\n", grid_dimension);
-    fflush(stdout);
+    fflush(stdout); */
 
     // Create grid of grid_cell_t
     grid_cells.resize(total_grid_count);
-    /* for (int i = 0; i < total_grid_count; ++i) {
+    for (int i = 0; i < total_grid_count; ++i) {
         // Create a new grid_cell_t instance and assign its pointer to the vector
-        grid_cells[i] = new grid_cell_t();
-    } */
+        grid_cells[i] = grid_cell_t();
+    }
+    
 
     // Iterate over all pariticles and place them into their corresponding grid_cell_t
     for (int i = 0; i < num_parts; i++) {
@@ -143,11 +144,11 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             for (int j = 0; j < grid_dimension; j++) {
                 // Compute current grid index and get the corresponding grid_cell_t
                 int curr_grid_index = (i + starting_row) * grid_dimension + j;
-                grid_cell_t curr_grid_cell = grid_cells[curr_grid_index];
+                grid_cell_t* curr_grid_cell = &grid_cells[curr_grid_index];
 
                 // Assign rank and index to current grid_cell
-                curr_grid_cell.rank = k;
-                curr_grid_cell.index = curr_grid_index;
+                curr_grid_cell->rank = k;
+                curr_grid_cell->index = curr_grid_index;
 
                 // Add grid_cell to this rank's vector of grid_cell_t
                 if (rank == k) {
@@ -184,10 +185,10 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
 
     //Updating is_ghost_to
     for (int g = 0; g < total_grid_count; g++) {
-        grid_cell_t curr_grid_cell = grid_cells[g];
-        for (grid_cell_t* neighbor_grid_cell: curr_grid_cell.neighbor_grids) {
-            if (curr_grid_cell.rank != neighbor_grid_cell->rank) {
-                curr_grid_cell.is_ghost_cell_to.insert(neighbor_grid_cell->rank);
+        grid_cell_t* curr_grid_cell = &grid_cells[g];
+        for (grid_cell_t* neighbor_grid_cell: curr_grid_cell->neighbor_grids) {
+            if (curr_grid_cell->rank != neighbor_grid_cell->rank) {
+                curr_grid_cell->is_ghost_cell_to.insert(neighbor_grid_cell->rank);
 
                 //TODO: one way is ok if iterating through all grids, since neighborhood is always mutual
                 //neighbor_g->is_ghost_cell_to.insert(curr_grid_cell->rank);
@@ -292,18 +293,18 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
             if (new_rank != rank) { // Case 1
                 particle_ids_to_send[new_rank].insert(p->id);
             }
-            grid_cell_t grid_cell_after_move = grid_cells[get_block_index(p)];
-            if (grid_cell_after_move.is_ghost_cell_to.size() > 0) { // Case 3
-                for (int neighbor_rank: grid_cell_after_move.is_ghost_cell_to) {
+            grid_cell_t* grid_cell_after_move = &grid_cells[get_block_index(p)];
+            if (grid_cell_after_move->is_ghost_cell_to.size() > 0) { // Case 3
+                for (int neighbor_rank: grid_cell_after_move->is_ghost_cell_to) {
                     particle_ids_to_send[neighbor_rank].insert(p->id);
                 }
             }
         }
     }
     
-    // Clear relevant grid_cells
-    for (grid_cell_t* g: rank_grid_cells) {
-        g->particles.clear();
+    // Update grids for particles owned by the rank pre-move
+    for (grid_cell_t& g : grid_cells) {
+        g.particles.clear();
     }
     for (grid_cell_t* g: rank_ghost_grid_cells) {
         g->particles.clear();
@@ -319,8 +320,8 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
         // Place in our copy of grid if:
         // 1. Still in chunk owned by this rank
         // 2. If it is in ghost zone of this rank.
-        grid_cell_t g = grid_cells[get_block_index(p)];
-        if (g.rank == rank || rank_ghost_grid_cells.find(&g) != rank_ghost_grid_cells.end()) {
+        grid_cell_t* g = &grid_cells[get_block_index(p)];
+        if (g->rank == rank || rank_ghost_grid_cells.find(g) != rank_ghost_grid_cells.end()) {
             grid_cells[get_block_index(p)].particles.push_back(p);
         }
     }
