@@ -284,7 +284,7 @@ std::vector<grid_cell_t*> get_neighbor_cells(grid_cell_t* grid) {
 }
 
 
-void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs, int step) {
+void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
     // Write this function
 
     // For each grid cell object calculate forces between all particles
