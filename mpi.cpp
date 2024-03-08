@@ -303,7 +303,13 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     }
     
     // Update grids for particles owned by the rank pre-move
-    for (grid_cell_t* g: grid_cells) {
+    /* for (grid_cell_t* g: grid_cells) {
+        g->particles.clear();
+    } */
+    for (grid_cell_t* g: rank_grid_cells) {
+        g->particles.clear();
+    }
+    for (grid_cell_t* g: rank_ghost_grid_cells) {
         g->particles.clear();
     }
     for (int part_id: rank_part_ids_before_move) {
