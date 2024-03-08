@@ -132,8 +132,75 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
     }
 
     // Assign grid_cell_t for each rank
-    // TODO: this needs to change for different domain division methods
-    int starting_row = 0;
+
+    //Grid board: grid_dimension * grid_dimension
+    // Idea: calculate the amount of chunks, have rows of chunks, and 
+    //       then divide them (unevenly at times) between each row 
+    int chunk_rows = ceil(sqrt(num_procs));
+    // number of chunks in each chunk-row
+    int chunk_cols[chunk_rows];
+    // row dimension of each chunk-row
+    int chunk_row_dims[chunk_rows];
+    for (int chunk_r = 0; chunk_r < chunk_rows; chunk_r++) {
+        chunk_cols[chunk_r] = num_procs / chunk_rows;
+        chunk_row_dims[chunk_r] = grid_dimension / chunk_rows;
+    }
+    for (int chunk_r = 0; chunk_r < num_procs % chunk_rows; chunk_r += 1) {
+        chunk_cols[chunk_r] += 1;
+    }
+    for (int i = 0; i < grid_dimension % chunk_rows; i++) {
+        chunk_row_dims[i] += 1;
+    }
+
+    // col dims can be different for each chunk 
+    std::vector<std::vector<int>> chunk_col_dims;
+    chunk_col_dims.resize(chunk_rows);
+    for (int i = 0; i < chunk_col_dims.size(); i++) {
+        chunk_col_dims[i].resize(chunk_cols[i]);
+
+        int remainder_grids_in_row = grid_dimension % chunk_cols[i];
+        //For each chunk in this chunk-row
+        for (int j = 0; j < chunk_col_dims[i].size(); j++) {
+            chunk_col_dims[i][j] = grid_dimension / chunk_cols[i];
+            if (j < remainder_grids_in_row) {
+                chunk_col_dims[i][j] += 1;
+            }
+        }
+    }
+    
+    // Col-dim for each i-th chunk in row r is:
+    // = grid_dimension / chunk_cols_for_row[r] + (grid_dimension % chunk_cols_for_row[r] > i)
+    int chunk_row_index = 0;
+    int chunk_col_index = 0;
+    // grid indices
+    int grid_row_off = 0;
+    int grid_col_off = 0;
+    int k = 0;
+    for (int chunk_row_index = 0; chunk_row_index < chunk_rows; chunk_row_index++) {
+        for (int chunk_col_index = 0; chunk_col_index < chunk_cols[chunk_row_index]; chunk_col_index++) {
+            for (int grid_row_index = 0; grid_row_index < chunk_row_dims[chunk_row_index]; grid_row_index++) {
+                for (int grid_col_index = 0; grid_col_index < chunk_col_dims[chunk_row_index][chunk_col_index]; grid_col_index++) {
+                    int curr_grid_index = (grid_row_index + grid_row_off) * grid_dimension + grid_col_index + grid_col_off;
+                    grid_cell_t* curr_grid_cell = grid_cells[curr_grid_index];
+
+                    // Assign rank and index to current grid_cell
+                    curr_grid_cell->rank = k;
+                    curr_grid_cell->index = curr_grid_index;
+
+                    // Add grid_cell to this rank's vector of grid_cell_t
+                    if (rank == k) {
+                        rank_grid_cells.push_back(curr_grid_cell);
+                    }
+                }
+            }
+            grid_col_off += chunk_col_dims[chunk_row_index][chunk_col_index];
+            k++;
+        }
+        grid_col_off = 0;
+        grid_row_off += chunk_row_dims[chunk_row_index];
+    }
+    
+    /* int starting_row = 0;
     for (int k = 0; k < num_procs; k += 1) {
         int rows_assigned_to_rank = grid_dimension / num_procs; // int division
         if (grid_dimension % num_procs > k ) { //n rows leftover, assign to first n ranks
@@ -157,7 +224,7 @@ void init_simulation(particle_t* parts, int num_parts, double size, int rank, in
             }
         }
         starting_row += rows_assigned_to_rank; // incrementing for next rank's iteration 
-    }
+    } */
 
     //"linking" grid_cells
     for (int g = 0; g < total_grid_count; g++) {
