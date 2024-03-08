@@ -1,0 +1,160 @@
+#include "common.h"
+#include <mpi.h>
+#include <vector>
+#include <cmath>
+#include <stdbool.h>
+
+static std::vector<std::vector<int>> grid_part_ids;
+static std::vector<std::vector<int>> ghost_grid_part_ids;
+static std::vector<std::vector<int>> grid_neighbors;
+static std::vector<std::vector<int>> grid_ghost_neighbors;
+
+static std::vector<int> parts_ids;
+static std::vector<int> ghost_parts_ids;
+
+// Put any static global variables here that you will use throughout the simulation.
+
+bool belongs_to_process(particle_t& p, double size, int rank, int num_procs) {
+	double chunk_height = size / num_procs;
+	double lower_limit = (double) rank / num_procs * chunk_height;
+        double upper_limit = (double) lower_limit + chunk_height;
+
+	return p.y >= lower_limit && p.y < upper_limit;
+}
+
+int get_grid_index(particle_t& p, double size, int rank, int num_procs) {
+    double lower_limit = (double) rank / num_procs * chunk_height;
+    return floor(p.x / cutoff) + floor((p.y - lower_limit) / cutoff) * grid_dimension;
+}
+
+bool is_in_ghost_zone(particle_t& p, double size, int rank, int num_procs) {
+	double chunk_height = size / num_procs;
+        double lower_limit = (double) rank / num_procs * chunk_height;
+        double upper_limit = (double) lower_limit + chunk_height;
+
+	if (p.y < lower_limit) {
+		return (p.y + cutoff) >= lower_limit;
+	} else if (p.y >= upper_limit) {
+		return (p.y - cutoff) < upper_limit;
+	}
+	return false;
+}
+
+//ASSUMPTION: particle P is in a ghost zone
+int get_ghost_grid_index(particle_t& p, double size, int rank, int num_procs) {
+	int offset;
+        double chunk_height = size / num_procs;
+        double lower_limit = (double) rank / num_procs * chunk_height;
+        double upper_limit = (double) lower_limit + chunk_height;
+
+	if (p.y >= upper_limit) {
+		offset = //TODO;
+	}
+}
+
+void init_simulation(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
+	// You can use this space to initialize data objects that you may need
+	// This function will be called once before the algorithm begins
+	// Do not do any particle simulation here
+
+	// **Using row-major order
+	// 1. Establish boundaries and ghost zones for each rank
+	// 2. Divide assigned area into grids
+	// 3. Divide assigned ghost zones into grids
+	// 4. Populate GRID_NEIGHBORS and GHOST_GRID_NEIGHBORS
+	// 5. Populate GRID_PART_IDS and GHOST_GRID_PART_IDS (only those in assigned region)
+	// Note: - parts within 1 cutoff distance away from edge are also in
+	// 	   ghost zones of other rank's chunk (unless at edge)
+	//	 - a particle can be in multiple ghost zones
+	//	 - a particle can belong to only one rank's chunk
+	int world_rank;
+	int world_size;
+
+	//Step 1: Dividing into rows-chunks
+	double chunk_height = size / num_procs;
+	double lower_limit = (double) rank / num_procs * chunk_height;
+	double upper_limit = (double) lower_limit + chunk_height;
+
+	//Step 2: Find out amount of grids
+	int grids_width = ceil(size / cutoff);
+	int grids_height = ceil(chunk_height / cutoff);
+	int grid_count = grids_width * grid_height;
+	grid_neighbors.resize(grid_count);
+	grid_ghost_neighbors.resize(grid_count);
+
+	//Step 3: Find out amount of ghost_grids
+	// Note: Essentially, the concerned particles are "up to date", while others are outdated
+	int ghost_grid_count = 0;
+	// Upper ghost row
+	if (rank < num_procs - 1) {
+		ghost_grid_count += grid_width;
+	}
+	// Lower ghost row
+	if (rank > 0) {
+		ghost_grid_count += grid_width;
+	}
+	// Format: {lower boundary ghost grids ..., upper boundary ghost grids ...}
+	ghost_grid_part_ids.resize(ghost_grid_count);
+	// Left and right currently have no ghost zones (when chunks are rows)
+
+	//Step 4: Populate grid neighbors
+	for (int i = 0; i < grids_height; i+=1) {
+		for (int j = 0; j < grids_width; j+=1) {
+			int grid_index = i * grid_row_dim + j;
+			int row_min = fmax(0, i - 1);
+			int row_max = fmin(grids_height - 1, i + 1);
+			int col_min = fmax(0, j - 1);
+			int col_max = fmin(grids_width - 1, j + 1);
+			for (int r = row_min; r <= row_max; r++) {
+				for (int c = col_min; c <= col_max; c++) {
+					grid_neighbors[grid_index].push_back(r * grid_row_dim + c);
+				}
+			}
+		}
+	}
+
+	//Step 4.5: Populate ghost grid neighbors
+
+	// Note: we only count ghost grids when there exist other chunk(s) across the boundary
+	//	 which means, when not the global boundary
+	if (rank > 0) { // not global lower boundary
+		for (int c = 0; c < grids_width; c++) {
+			int col_min = fmax(0, c - 1);
+			int col_max = fmin(grids_width - 1, c + 1)
+			for (int ghost_c = col_min; ghost_c < col_max; ghost_c++) {
+				// index_row = 0, ghost_row = 0
+				grid_ghost_neghbors[c].push_back(ghost_c);
+			}
+		}
+	}
+	if (rank < num_procs - 1) { // not global upper boundary
+		int index_offset = (grids_height - 1) * grids_width;
+		for (int c = 0; c < grids_width; c++) {
+			int col_min = fmax(0, c - 1);
+			int col_max = fmin(grids_width - 1, c + 1)
+			for (int ghost_c = col_min; ghost_c < col_max; ghost_c++) {
+				// index_row = grids_height - 1, ghost_"row" = 1
+				grid_ghost_neghbors[index_offset + c].push_back(grids_width + ghost_c);
+			}
+		}
+	}
+
+	//Step 5: iterate through PARTS and place them in grids
+	for (int i = 0; i < num_parts; i++) {
+		particle_t p = parts[i];
+		if (belongs_to_process(p, size, rank, num_procs)) {
+			int grid_index = get_grid_index(p, size, rank, num_procs);
+			
+		}
+	}
+}
+
+void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
+    // Write this function
+}
+
+void gather_for_save(particle_t* parts, int num_parts, double size, int rank, int num_procs) {
+    // Write this function such that at the end of it, the master (rank == 0)
+    // processor has an in-order view of all particles. That is, the array
+    // parts is complete and sorted by particle id.
+}
